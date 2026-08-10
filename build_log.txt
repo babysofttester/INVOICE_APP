@@ -1,0 +1,6 @@
+  0s drift_dev on 88 inputs; lib/database/app_database.dart
+  0s drift_dev on 88 inputs: 1 skipped; lib/main.dart
+  0s drift_dev on 88 inputs: 88 skipped
+  0s source_gen:combining_builder on 44 inputs; lib/database/app_database.dart
+  0s source_gen:combining_builder on 44 inputs: 44 skipped
+  Built with build_runner/aot in 2s; wrote 0 outputs.
