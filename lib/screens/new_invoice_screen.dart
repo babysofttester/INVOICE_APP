@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -10,6 +11,7 @@ import 'package:printing/printing.dart';
 
 import '../models/invoice.dart';
 import '../models/invoice_item_data.dart';
+import '../services/auto_backup_service.dart';
 import '../services/business_profile_service.dart';
 import '../services/invoice_pdf_service.dart';
 import '../services/invoice_storage_service.dart';
@@ -242,6 +244,12 @@ class _NewInvoiceScreenState extends State<NewInvoiceScreen> {
       final invoice = _buildInvoiceModel(base64Encode(bytes));
 
       await InvoiceStorageService.instance.saveInvoice(invoice);
+
+      // Fire-and-forget: if auto-backup is on, sync just this invoice's
+      // PDF to the chosen Drive folder. Failures are handled silently
+      // inside the service (surfaces via lastSyncFailed) so a Drive
+      // hiccup never blocks the invoice from being generated/saved.
+      unawaited(AutoBackupService.instance.backupInvoice(invoice));
 
       if (!mounted) return;
       setState(() => _generating = false);

@@ -249,9 +249,9 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AppColors.brand.withOpacity(0.06),
+                  color: AppColors.brand.withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.brand.withOpacity(0.15)),
+                  border: Border.all(color: AppColors.brand.withValues(alpha: 0.15)),
                 ),
                 child: const Text(
                   'These details will appear on every invoice. '

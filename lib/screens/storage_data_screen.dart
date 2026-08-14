@@ -1,12 +1,22 @@
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 
+import '../services/auto_backup_service.dart';
 import '../services/invoice_storage_service.dart';
 import '../theme/app_theme.dart';
 
-class StorageDataScreen extends StatelessWidget {
+class StorageDataScreen extends StatefulWidget {
   const StorageDataScreen({super.key});
+
+  @override
+  State<StorageDataScreen> createState() => _StorageDataScreenState();
+}
+
+class _StorageDataScreenState extends State<StorageDataScreen> {
+  final AutoBackupService _autoBackup = AutoBackupService.instance;
+  bool _autoBackupBusy = false;
 
   ({int count, double kb}) _storageStats() {
     final invoices = InvoiceStorageService.instance.getAll();
@@ -48,6 +58,67 @@ class StorageDataScreen extends StatelessWidget {
     }
   }
 
+  // --- Auto backup actions --------------------------------------------
+  Future<void> _toggleAutoBackup(bool turnOn) async {
+    if (turnOn) {
+      setState(() => _autoBackupBusy = true);
+      try {
+        final granted = await _autoBackup.enable(); // shows native folder picker
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(granted
+                ? 'Auto-backup on — every invoice PDF will now sync to the selected folder.'
+                : 'No folder was selected, auto-backup stays off.'),
+          ),
+        );
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not enable auto-backup: ${_friendlyError(e)}')),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _autoBackupBusy = false);
+      }
+    } else {
+      await _autoBackup.disable();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Auto-backup turned off.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _backupAllNow() async {
+    setState(() => _autoBackupBusy = true);
+    try {
+      await _autoBackup.backupAll();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_autoBackup.lastSyncFailed.value
+              ? 'Backup failed — check folder access and try again.'
+              : 'All invoices backed up ✓'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _autoBackupBusy = false);
+    }
+  }
+
+  String _friendlyError(Object e) {
+    final msg = e.toString().replaceFirst('Exception: ', '');
+    return msg.length > 120 ? '${msg.substring(0, 120)}…' : msg;
+  }
+
+  String _lastSyncedLabel(DateTime? last) {
+    if (last == null) return 'Not synced yet';
+    return 'Last synced ${DateFormat('dd MMM, hh:mm a').format(last)}';
+  }
+  // ---------------------------------------------------------------------
+
 @override
 Widget build(BuildContext context) {
   final stats = _storageStats();
@@ -71,13 +142,13 @@ Widget build(BuildContext context) {
                 end: Alignment.bottomRight,
                 colors: [
                   AppColors.brand,
-                  AppColors.brand.withOpacity(0.8),
+                  AppColors.brand.withValues(alpha: 0.8),
                 ],
               ),
               borderRadius: BorderRadius.circular(18),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.brand.withOpacity(0.22),
+                  color: AppColors.brand.withValues(alpha: 0.22),
                   blurRadius: 16,
                   offset: const Offset(0, 6),
                 ),
@@ -88,7 +159,7 @@ Widget build(BuildContext context) {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.lock_outline_rounded, color: Colors.white.withOpacity(0.9), size: 16),
+                    Icon(Icons.lock_outline_rounded, color: Colors.white.withValues(alpha: 0.9), size: 16),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -113,7 +184,7 @@ Widget build(BuildContext context) {
                           value: '${stats.count}',
                         ),
                       ),
-                      Container(width: 1, color: Colors.white.withOpacity(0.25)),
+                      Container(width: 1, color: Colors.white.withValues(alpha: 0.25)),
                       Expanded(
                         child: _statBlock(
                           icon: Icons.sd_storage_outlined,
@@ -121,7 +192,7 @@ Widget build(BuildContext context) {
                           value: _formatSize(stats.kb),
                         ),
                       ),
-                      Container(width: 1, color: Colors.white.withOpacity(0.25)),
+                      Container(width: 1, color: Colors.white.withValues(alpha: 0.25)),
                       Expanded(
                         child: _statBlock(
                           icon: Icons.devices_rounded,
@@ -165,6 +236,12 @@ Widget build(BuildContext context) {
           ),
           const SizedBox(height: 12),
 
+          // ── Automatic Backup status (Android only) ────────────
+          if (_autoBackup.available) ...[
+            _autoBackupCard(),
+            const SizedBox(height: 12),
+          ],
+
           // ── Backup steps (compact) ────────────────────────────
           Container(
             width: double.infinity,
@@ -179,7 +256,7 @@ Widget build(BuildContext context) {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.backup_rounded, color: AppColors.brand, size: 18),
+                    const Icon(Icons.backup_rounded, color: AppColors.brand, size: 18),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -194,36 +271,62 @@ Widget build(BuildContext context) {
                   ],
                 ),
                 const SizedBox(height: 12),
-                _backupStep(
-                  number: '1',
-                  text: 'Open any invoice from "My Invoices" and tap View or Share',
-                ),
-                _backupStep(
-                  number: '2',
-                  text: kIsWeb
-                      ? 'Save the PDF via your browser\'s download prompt, or print to Drive'
-                      : 'Save the PDF to Drive, WhatsApp, email, or any folder on your phone',
-                ),
-                _backupStep(
-                  number: '3',
-                  text: 'Repeat regularly — e.g. once a week or after a big sale',
-                  isLast: true,
-                ),
+                if (_autoBackup.available) ...[
+                  _backupStep(
+                    number: '1',
+                    text: 'Turn on "Automatic Backup" above and pick a Drive folder — one time only',
+                  ),
+                  _backupStep(
+                    number: '2',
+                    text: 'From then on, every invoice you generate or edit backs up by itself',
+                  ),
+                  _backupStep(
+                    number: '3',
+                    text: 'Or manually: open any invoice from "My Invoices" and tap Share',
+                  ),
+                  _backupStep(
+                    number: '4',
+                    text: 'Save/share that PDF to Drive, WhatsApp, email, or any folder',
+                    isLast: true,
+                  ),
+                ] else ...[
+                  _backupStep(
+                    number: '1',
+                    text: 'Open any invoice from "My Invoices" and tap View or Share',
+                  ),
+                  _backupStep(
+                    number: '2',
+                    text: kIsWeb
+                        ? 'Save the PDF via your browser\'s download prompt, or print to Drive'
+                        : 'Save the PDF to Drive, WhatsApp, email, or any folder on your phone',
+                  ),
+                  _backupStep(
+                    number: '3',
+                    text: 'Repeat regularly — e.g. once a week or after a big sale',
+                    isLast: true,
+                  ),
+                ],
               ],
             ),
           ),
 
           const SizedBox(height: 20),
 
-          const Center(
+          Center(
             child: Column(
               children: [
-                Icon(Icons.cloud_off_rounded, size: 20, color: AppColors.slateLight),
-                SizedBox(height: 6),
+                Icon(
+                  _autoBackup.available ? Icons.cloud_done_rounded : Icons.cloud_off_rounded,
+                  size: 20,
+                  color: AppColors.slateLight,
+                ),
+                const SizedBox(height: 6),
                 Text(
-                  'No automatic cloud backup is available.\nThis keeps your data completely private and offline.',
+                  _autoBackup.available
+                      ? 'Automatic Drive backup is available on this device.\nTurn it on above so every invoice syncs by itself — no manual steps needed.'
+                      : 'Automatic cloud backup isn\'t available on $_platformLabel yet — use the manual steps above.\nYour data stays completely private and offline either way.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 12, color: AppColors.slateLight, height: 1.5),
+                  style: const TextStyle(fontSize: 12, color: AppColors.slateLight, height: 1.5),
                 ),
               ],
             ),
@@ -234,13 +337,107 @@ Widget build(BuildContext context) {
     ),
   );
 }
+
+  Widget _autoBackupCard() {
+    return ValueListenableBuilder<bool>(
+      valueListenable: _autoBackup.isEnabled,
+      builder: (context, enabled, _) {
+        return ValueListenableBuilder<DateTime?>(
+          valueListenable: _autoBackup.lastSyncedAt,
+          builder: (context, lastSynced, __) {
+            return Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.paperCard,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.divider),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(9),
+                        decoration: BoxDecoration(
+                          color: AppColors.brand.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(11),
+                        ),
+                        child: const Icon(Icons.cloud_sync_rounded, color: AppColors.brand, size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Automatic Backup',
+                              style: GoogleFonts.lora(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.inkNavy,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              enabled
+                                  ? _lastSyncedLabel(lastSynced)
+                                  : 'Pick a Drive folder once — every invoice PDF syncs there automatically from then on',
+                              style: const TextStyle(fontSize: 12.5, height: 1.4, color: AppColors.slate),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _autoBackupBusy
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2.5))
+                          : Switch(
+                              value: enabled,
+                              onChanged: _toggleAutoBackup,
+                              activeColor: AppColors.brand,
+                            ),
+                    ],
+                  ),
+                  if (enabled) ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _autoBackupBusy ? null : _backupAllNow,
+                        icon: const Icon(Icons.sync_rounded, size: 17, color: AppColors.brand),
+                        label: const Text(
+                          'Backup All Now',
+                          style: TextStyle(color: AppColors.brand, fontWeight: FontWeight.w700),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: AppColors.brand),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _statBlock({required IconData icon, required String label, required String value}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 6),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: Colors.white.withOpacity(0.9), size: 15),
+          Icon(icon, color: Colors.white.withValues(alpha: 0.9), size: 15),
           const SizedBox(height: 5),
           FittedBox(
             fit: BoxFit.scaleDown,
@@ -260,7 +457,7 @@ Widget build(BuildContext context) {
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.85)),
+            style: TextStyle(fontSize: 10, color: Colors.white.withValues(alpha: 0.85)),
           ),
         ],
       ),
@@ -278,7 +475,7 @@ Widget build(BuildContext context) {
             height: 20,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppColors.brand.withOpacity(0.1),
+              color: AppColors.brand.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Text(
@@ -321,7 +518,7 @@ Widget build(BuildContext context) {
           Container(
             padding: const EdgeInsets.all(9),
             decoration: BoxDecoration(
-              color: iconColor.withOpacity(0.1),
+              color: iconColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(11),
             ),
             child: Icon(icon, color: iconColor, size: 20),

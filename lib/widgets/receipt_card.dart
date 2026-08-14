@@ -67,16 +67,16 @@ class ReceiptCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.paperCard,
           border: Border(
-            top: BorderSide(color: AppColors.divider),
-            right: BorderSide(color: AppColors.divider),
-            bottom: BorderSide(color: AppColors.divider),
+            top: const BorderSide(color: AppColors.divider),
+            right: const BorderSide(color: AppColors.divider),
+            bottom: const BorderSide(color: AppColors.divider),
             // The accent strip is now just a fat left border — no
             // second widget, no IntrinsicHeight, no height-matching
             // math that can be off by a pixel or two.
-            left: BorderSide(color: _statusColor.withOpacity(0.9), width: 5),
+            left: BorderSide(color: _statusColor.withValues(alpha: 0.9), width: 5),
           ),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2)),
+            BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2)),
           ],
         ),
         child: Padding(
@@ -96,7 +96,7 @@ class ReceiptCard extends StatelessWidget {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: AppColors.brand.withOpacity(0.08),
+                        color: AppColors.brand.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Icon(Icons.receipt_long_rounded, color: AppColors.brand, size: 20),
@@ -132,7 +132,7 @@ class ReceiptCard extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: _statusColor.withOpacity(0.1),
+                            color: _statusColor.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Row(
@@ -168,7 +168,7 @@ class ReceiptCard extends StatelessWidget {
                             icon: const Icon(Icons.visibility_outlined, size: 15),
                             label: const Text('View', style: TextStyle(fontSize: 12.5)),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.brand.withOpacity(0.08),
+                              backgroundColor: AppColors.brand.withValues(alpha: 0.08),
                               foregroundColor: AppColors.brand,
                               elevation: 0,
                               padding: EdgeInsets.zero,
@@ -181,7 +181,7 @@ class ReceiptCard extends StatelessWidget {
                       _ActionIcon(
                         icon: Icons.edit_outlined,
                         tooltip: 'Edit',
-                        background: AppColors.brand.withOpacity(0.1),
+                        background: AppColors.brand.withValues(alpha: 0.1),
                         color: AppColors.brand,
                         onTap: onEdit!,
                       ),
@@ -191,7 +191,7 @@ class ReceiptCard extends StatelessWidget {
                       _ActionIcon(
                         icon: Icons.delete_outline_rounded,
                         tooltip: 'Delete',
-                        background: Colors.red.withOpacity(0.1),
+                        background: Colors.red.withValues(alpha: 0.1),
                         color: Colors.red,
                         onTap: onDelete!,
                       ),

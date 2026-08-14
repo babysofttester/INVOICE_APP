@@ -121,8 +121,8 @@ class _SplashScreenState extends State<SplashScreen>
                       shape: BoxShape.circle,
                       gradient: RadialGradient(
                         colors: [
-                          AppColors.brand.withOpacity(0.08),
-                          AppColors.brand.withOpacity(0.0),
+                          AppColors.brand.withValues(alpha: 0.08),
+                          AppColors.brand.withValues(alpha: 0.0),
                         ],
                       ),
                     ),
@@ -148,7 +148,7 @@ class _SplashScreenState extends State<SplashScreen>
                             border: Border.all(color: AppColors.divider),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.brand.withOpacity(0.10),
+                                color: AppColors.brand.withValues(alpha: 0.10),
                                 blurRadius: 28,
                                 offset: const Offset(0, 10),
                               ),
@@ -213,7 +213,7 @@ class _SplashScreenState extends State<SplashScreen>
                       child: CircularProgressIndicator(
                         strokeWidth: 2.4,
                         valueColor: AlwaysStoppedAnimation(
-                          AppColors.brand.withOpacity(0.55),
+                          AppColors.brand.withValues(alpha: 0.55),
                         ),
                       ),
                     ),

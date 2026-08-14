@@ -193,7 +193,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
   Future<void> _deleteInvoice(Invoice invoice) async {
     final confirm = await showDialog<bool>(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.5),
+      barrierColor: Colors.black.withValues(alpha: 0.5),
       builder: (ctx) => Dialog(
         backgroundColor: Colors.transparent,
         insetPadding: const EdgeInsets.symmetric(horizontal: 28),
@@ -204,7 +204,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.15),
+                color: Colors.black.withValues(alpha: 0.15),
                 blurRadius: 24,
                 offset: const Offset(0, 8),
               ),
@@ -218,8 +218,8 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                 height: 60,
                 decoration: BoxDecoration(
                   color: invoice.paid
-                      ? AppColors.amber.withOpacity(0.15)
-                      : Colors.red.withOpacity(0.1),
+                      ? AppColors.amber.withValues(alpha: 0.15)
+                      : Colors.red.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
@@ -374,7 +374,7 @@ padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),              
                       key: _filterButtonKey,
                       color: _filter == _QuickFilter.all
                           ? AppColors.paperCard
-                          : AppColors.brand.withOpacity(0.1),
+                          : AppColors.brand.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(14),
                       child: InkWell(
                         onTap: _openFilterMenu,
@@ -385,7 +385,7 @@ padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),              
                             border: Border.all(
                               color: _filter == _QuickFilter.all
                                   ? AppColors.divider
-                                  : AppColors.brand.withOpacity(0.4),
+                                  : AppColors.brand.withValues(alpha: 0.4),
                             ),
                           ),
                           child: Row(

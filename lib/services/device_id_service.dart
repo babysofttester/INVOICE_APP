@@ -100,7 +100,7 @@ class DeviceIdService {
     } else {
       final generated = _generate();
       await _db.into(_db.deviceMeta).insertOnConflictUpdate(
-            DeviceMetaCompanion.insert(id: Value(_rowId),
+            DeviceMetaCompanion.insert(id: const Value(_rowId),
 installId: generated,),
           );
       _cachedId = generated;

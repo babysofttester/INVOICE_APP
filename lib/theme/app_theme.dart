@@ -162,7 +162,7 @@ class AppTheme {
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: AppColors.paperCard,
-        indicatorColor: AppColors.brand.withOpacity(0.14),
+        indicatorColor: AppColors.brand.withValues(alpha: 0.14),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
       ),

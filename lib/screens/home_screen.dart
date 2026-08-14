@@ -128,7 +128,7 @@ class _BusinessHeaderCard extends StatelessWidget {
         border: Border.all(color: AppColors.divider),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -139,7 +139,7 @@ class _BusinessHeaderCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: AppColors.brand.withOpacity(0.1),
+              color: AppColors.brand.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(Icons.storefront_rounded,
@@ -173,7 +173,7 @@ class _BusinessHeaderCard extends StatelessWidget {
                 style: TextStyle(
                     fontSize: 12, color: AppColors.brand, fontWeight: FontWeight.w600)),
             style: OutlinedButton.styleFrom(
-              side: BorderSide(color: AppColors.brand.withOpacity(0.3)),
+              side: BorderSide(color: AppColors.brand.withValues(alpha: 0.3)),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),

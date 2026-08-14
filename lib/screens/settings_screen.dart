@@ -5,12 +5,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:invoice_generator/screens/main_shell.dart';
+import 'package:intl/intl.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:upgrader/upgrader.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../screens/business_profile_screen.dart';
 import '../screens/storage_data_screen.dart';
+import '../services/auto_backup_service.dart';
 import '../theme/app_theme.dart';
 
 // ============================================================
@@ -33,11 +35,19 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   String _appVersion = '';
   bool _checkingUpdate = false;
+  bool _autoBackupBusy = false;
+
+  final AutoBackupService _autoBackup = AutoBackupService.instance;
 
   @override
   void initState() {
     super.initState();
     _loadAppInfo();
+    // Safe to call even if main.dart already called this at startup —
+    // init() is a no-op after the first successful run.
+    _autoBackup.init().then((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   Future<void> _loadAppInfo() async {
@@ -102,7 +112,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // --- macOS / Windows / Linux: GitHub Releases check (auto-skips if not configured) ---
   Future<void> _checkDesktopUpdate() async {
-    final repo = _UpdateConfig.githubRepo;
+    const repo = _UpdateConfig.githubRepo;
 
     // Not configured yet (testing phase) — just show current version.
     if (repo.isEmpty) {
@@ -182,6 +192,75 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  // --- Auto backup toggle handling -----------------------------------
+  Future<void> _toggleAutoBackup(bool turnOn) async {
+    if (turnOn) {
+      setState(() => _autoBackupBusy = true);
+      try {
+        final granted = await _autoBackup.enable(); // shows native folder picker
+        if (!mounted) return;
+        if (!granted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('No folder was selected, auto-backup stays off.')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text(
+                    'Auto-backup on — every invoice PDF will now sync to the selected folder.')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not enable auto-backup: ${_friendlyError(e)}')),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _autoBackupBusy = false);
+      }
+    } else {
+      await _autoBackup.disable();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Auto-backup turned off.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _backupAllNow() async {
+    setState(() => _autoBackupBusy = true);
+    try {
+      await _autoBackup.backupAll();
+      if (!mounted) return;
+      if (_autoBackup.lastSyncFailed.value) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Backup failed — check folder access and try again.')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('All invoices backed up ✓')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _autoBackupBusy = false);
+    }
+  }
+
+  String _friendlyError(Object e) {
+    final msg = e.toString().replaceFirst('Exception: ', '');
+    if (msg.length > 120) return '${msg.substring(0, 120)}…';
+    return msg;
+  }
+
+  String _lastSyncedLabel(DateTime? last) {
+    if (last == null) return 'Pick a folder once — new invoice PDFs sync automatically';
+    return 'Last synced ${DateFormat('dd MMM, hh:mm a').format(last)}';
+  }
+  // ---------------------------------------------------------------------
+
  @override
   Widget build(BuildContext context) {
     return Material(
@@ -217,6 +296,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
               MaterialPageRoute(builder: (_) => const StorageDataScreen()),
             ),
           ),
+
+          // ---------- Automatic Backup (Android only) ----------
+          if (_autoBackup.available) ...[
+            const SizedBox(height: 20),
+            _sectionLabel('Automatic Backup'),
+            const SizedBox(height: 8),
+            ValueListenableBuilder<bool>(
+              valueListenable: _autoBackup.isEnabled,
+              builder: (context, enabled, _) {
+                return ValueListenableBuilder<DateTime?>(
+                  valueListenable: _autoBackup.lastSyncedAt,
+                  builder: (context, lastSynced, __) {
+                    return Column(
+                      children: [
+                        _buildSwitchTile(
+                          icon: Icons.cloud_sync_rounded,
+                          title: 'Auto Backup to Drive (PDF)',
+                          subtitle: enabled
+                              ? _lastSyncedLabel(lastSynced)
+                              : 'Pick a Drive folder once — every generated invoice syncs there automatically',
+                          value: enabled,
+                          busy: _autoBackupBusy,
+                          onChanged: _autoBackupBusy ? null : _toggleAutoBackup,
+                        ),
+                        if (enabled) ...[
+                          const SizedBox(height: 8),
+                          _buildSettingsTile(
+                            icon: Icons.sync_rounded,
+                            title: 'Backup All Now',
+                            subtitle: 'Re-sync every saved invoice right away',
+                            onTap: _autoBackupBusy ? () {} : _backupAllNow,
+                            trailing: _autoBackupBusy
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(strokeWidth: 2.5))
+                                : null,
+                          ),
+                        ],
+                      ],
+                    );
+                  },
+                );
+              },
+            ),
+          ],
+          // -------------------------------------------------------
 
           if (!kIsWeb) ...[
             const SizedBox(height: 8),
@@ -257,6 +383,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
   }
+
+  Widget _sectionLabel(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: AppColors.slateLight,
+        ),
+      ),
+    );
+  }
+
   Widget _buildSettingsTile({
     required IconData icon,
     required String title,
@@ -296,6 +437,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
             trailing ?? const Icon(Icons.chevron_right_rounded, color: AppColors.slateLight),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSwitchTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required bool busy,
+    required ValueChanged<bool>? onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.paperCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: AppColors.brand, size: 26),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.inkNavy)),
+                const SizedBox(height: 4),
+                Text(subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 13, color: AppColors.slateLight)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          busy
+              ? const SizedBox(
+                  width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.5))
+              : Switch(
+                  value: value,
+                  onChanged: onChanged,
+                  activeColor: AppColors.brand,
+                ),
+        ],
       ),
     );
   }
