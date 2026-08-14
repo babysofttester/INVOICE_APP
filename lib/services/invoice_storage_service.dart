@@ -1,134 +1,3 @@
-// import 'package:flutter/foundation.dart';
-// import 'package:hive_ce/hive.dart';
-// import 'package:hive_ce_flutter/hive_flutter.dart';
-// import 'device_id_service.dart';   // add this import at the top
-// import '../models/invoice.dart';
-
-// /// Local, offline invoice database.
-// ///
-// /// Uses Hive instead of sqflite on purpose: sqflite has no web
-// /// implementation, while Hive runs the same on Android, iOS, desktop
-// /// AND web (it falls back to IndexedDB in the browser). That's what
-// /// lets "permanent local storage" behave the same on every platform
-// /// this app targets.
-// ///
-// /// Each invoice (including its generated PDF, as base64) is stored as
-// /// one JSON string in the `invoices` box, keyed by invoice id/number.
-// class InvoiceStorageService {
-//   InvoiceStorageService._();
-//   static final InvoiceStorageService instance = InvoiceStorageService._();
-
-//   static const _boxName = 'invoices';
-//   Box<String>? _box;
-
-//   /// Bumps every time data changes (save/delete/payment update).
-//   /// Screens listen to this with ValueListenableBuilder so they refresh
-//   /// instantly — even while offstage inside an IndexedStack (fixes the
-//   /// "switch tabs and don't see the new invoice" issue).
-//   static final ValueNotifier<int> revision = ValueNotifier<int>(0);
-//   void _notifyChanged() => revision.value++;
-
-//   Future<void> init() async {
-//     await Hive.initFlutter();
-//     _box = await Hive.openBox<String>(_boxName);
-//   }
-
-//   Box<String> get _requireBox {
-//     final box = _box;
-//     if (box == null) {
-//       throw StateError(
-//           'InvoiceStorageService.init() must be awaited before use (call it in main()).');
-//     }
-//     return box;
-//   }
-
-
-
-
-
-// String nextInvoiceNumber() {
-//   final prefix = 'INV-${DeviceIdService.instance.id}-';
-//   final existing = getAll().where((inv) => inv.number.startsWith(prefix));
-
-//   int highest = 0;
-//   for (final inv in existing) {
-//     final numPart = inv.number.substring(prefix.length);
-//     final n = int.tryParse(numPart);
-//     if (n != null && n > highest) highest = n;
-//   }
-
-//   return '$prefix${(highest + 1).toString().padLeft(6, '0')}';
-// }
-//   Future<void> saveInvoice(Invoice invoice) async {
-//     await _requireBox.put(invoice.id, invoice.encode());
-//     _notifyChanged();
-//   }
-
-//   Future<void> deleteInvoice(String id) async {
-//     await _requireBox.delete(id);
-//     _notifyChanged();
-//   }
-
-//   Future<void> setPaymentMode(String id, PaymentMode mode) async {
-//     final raw = _requireBox.get(id);
-//     if (raw == null) return;
-//     final updated = Invoice.decode(raw).copyWith(paymentMode: mode);
-//     await _requireBox.put(id, updated.encode());
-//     _notifyChanged();
-//   }
-
-//   List<Invoice> getAll() {
-//     final invoices = _requireBox.values.map((raw) => Invoice.decode(raw)).toList();
-//     invoices.sort((a, b) => b.date.compareTo(a.date));
-//     return invoices;
-//   }
-
-//   /// Simple next-invoice-number generator, e.g. INV-0009.
-//   /// Looks at how many invoices exist so far; safe for offline single-device use.
-//   // String nextInvoiceNumber() {
-//   //   final count = _requireBox.length;
-//   //   final next = count + 1;
-//   //   return 'INV-${next.toString().padLeft(4, '0')}';
-//   // }
-
-//   /// Plain text search (name / invoice number), no date filter.
-//   List<Invoice> search(String query) {
-//     final q = query.trim().toLowerCase();
-//     if (q.isEmpty) return getAll();
-//     return getAll().where((inv) {
-//       return inv.customerName.toLowerCase().contains(q) ||
-//           inv.number.toLowerCase().contains(q);
-//     }).toList();
-//   }
-
-//   /// Search + strict date filter. When [from]/[to] are given, ONLY
-//   /// invoices with a date inside [from, to] (inclusive, whole days) are
-//   /// returned — never fewer, never more than that window, regardless of
-//   /// the text query. Pass both null to disable date filtering entirely.
-//   List<Invoice> searchWithRange(String query, {DateTime? from, DateTime? to}) {
-//     Iterable<Invoice> result = getAll();
-
-//     if (from != null) {
-//       final start = DateTime(from.year, from.month, from.day);
-//       result = result.where((inv) => !inv.date.isBefore(start));
-//     }
-//     if (to != null) {
-//       final end = DateTime(to.year, to.month, to.day, 23, 59, 59, 999);
-//       result = result.where((inv) => !inv.date.isAfter(end));
-//     }
-
-//     final q = query.trim().toLowerCase();
-//     if (q.isNotEmpty) {
-//       result = result.where((inv) =>
-//           inv.customerName.toLowerCase().contains(q) ||
-//           inv.number.toLowerCase().contains(q));
-//     }
-
-//     final list = result.toList();
-//     list.sort((a, b) => b.date.compareTo(a.date));
-//     return list;
-//   }
-// }
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 
@@ -208,6 +77,11 @@ class InvoiceStorageService {
               items: itemsByInvoice[row.id] ?? [],
               subtotal: row.subtotal,
               totalDiscount: row.totalDiscount,
+              gstType: GstTypeX.fromStorage(row.gstType),
+              gstRate: row.gstRate,
+              cgstAmount: row.cgstAmount,
+              sgstAmount: row.sgstAmount,
+              igstAmount: row.igstAmount,
               grandTotal: row.grandTotal,
               pdfBase64: row.pdfBase64,
               paymentMode: PaymentModeX.fromStorage(row.paymentMode),
@@ -253,6 +127,11 @@ class InvoiceStorageService {
               customerAddress: Value(invoice.customerAddress),
               subtotal: Value(invoice.subtotal),
               totalDiscount: Value(invoice.totalDiscount),
+              gstType: Value(invoice.gstType.storageValue),
+              gstRate: Value(invoice.gstRate),
+              cgstAmount: Value(invoice.cgstAmount),
+              sgstAmount: Value(invoice.sgstAmount),
+              igstAmount: Value(invoice.igstAmount),
               grandTotal: Value(invoice.grandTotal),
               paymentMode: Value(invoice.paymentMode.storageValue),
               businessName: Value(invoice.businessName),

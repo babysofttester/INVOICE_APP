@@ -14,7 +14,9 @@ import '../models/invoice.dart';
 /// Business name/phone/address are read from `invoice.businessName` etc
 /// (a snapshot taken at generation time — see `Invoice`), NOT from the
 /// live business profile, so this PDF never changes retroactively if the
-/// user edits their business details later.
+/// user edits their business details later. GST (CGST/SGST/IGST) is the
+/// same kind of snapshot — whatever was chosen when the invoice was
+/// generated is what prints, even if the GST rate changes later.
 ///
 /// The items table is built from `invoice.items` at generation time, so
 /// it automatically grows/shrinks with however many rows the user added
@@ -46,6 +48,9 @@ class InvoicePdfService {
         logoImage = null; // corrupt/invalid data — fall back to no logo
       }
     }
+
+    // GST rate split for display (e.g. 18% -> 9% CGST + 9% SGST).
+    final halfGstRate = invoice.gstRate / 2;
 
     doc.addPage(
       pw.MultiPage(
@@ -218,6 +223,27 @@ class InvoicePdfService {
                   _totalRow('Subtotal', currency.format(invoice.subtotal), slate),
                   pw.SizedBox(height: 6),
                   _totalRow('Discount', '- ${currency.format(invoice.totalDiscount)}', slate),
+                  if (invoice.gstType == GstType.cgstSgst) ...[
+                    pw.SizedBox(height: 6),
+                    _totalRow(
+                      'CGST (${_fmtRate(halfGstRate)}%)',
+                      currency.format(invoice.cgstAmount),
+                      slate,
+                    ),
+                    pw.SizedBox(height: 6),
+                    _totalRow(
+                      'SGST (${_fmtRate(halfGstRate)}%)',
+                      currency.format(invoice.sgstAmount),
+                      slate,
+                    ),
+                  ] else if (invoice.gstType == GstType.igst) ...[
+                    pw.SizedBox(height: 6),
+                    _totalRow(
+                      'IGST (${_fmtRate(invoice.gstRate)}%)',
+                      currency.format(invoice.igstAmount),
+                      slate,
+                    ),
+                  ],
                   pw.SizedBox(height: 8),
                   pw.Divider(color: divider),
                   _totalRow(
@@ -240,6 +266,9 @@ class InvoicePdfService {
 
     return doc.save();
   }
+
+  static String _fmtRate(double rate) =>
+      rate == rate.roundToDouble() ? rate.toInt().toString() : rate.toStringAsFixed(1);
 
   static pw.Widget _totalRow(String label, String value, PdfColor color,
       {bool bold = false, double size = 11}) {

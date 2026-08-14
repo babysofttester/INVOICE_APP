@@ -64,6 +64,46 @@ class $InvoicesTable extends Invoices
       type: DriftSqlType.double,
       requiredDuringInsert: false,
       defaultValue: const Constant(0));
+  static const VerificationMeta _gstTypeMeta =
+      const VerificationMeta('gstType');
+  @override
+  late final GeneratedColumn<String> gstType = GeneratedColumn<String>(
+      'gst_type', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('none'));
+  static const VerificationMeta _gstRateMeta =
+      const VerificationMeta('gstRate');
+  @override
+  late final GeneratedColumn<double> gstRate = GeneratedColumn<double>(
+      'gst_rate', aliasedName, false,
+      type: DriftSqlType.double,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _cgstAmountMeta =
+      const VerificationMeta('cgstAmount');
+  @override
+  late final GeneratedColumn<double> cgstAmount = GeneratedColumn<double>(
+      'cgst_amount', aliasedName, false,
+      type: DriftSqlType.double,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _sgstAmountMeta =
+      const VerificationMeta('sgstAmount');
+  @override
+  late final GeneratedColumn<double> sgstAmount = GeneratedColumn<double>(
+      'sgst_amount', aliasedName, false,
+      type: DriftSqlType.double,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _igstAmountMeta =
+      const VerificationMeta('igstAmount');
+  @override
+  late final GeneratedColumn<double> igstAmount = GeneratedColumn<double>(
+      'igst_amount', aliasedName, false,
+      type: DriftSqlType.double,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
   static const VerificationMeta _grandTotalMeta =
       const VerificationMeta('grandTotal');
   @override
@@ -138,6 +178,11 @@ class $InvoicesTable extends Invoices
         customerAddress,
         subtotal,
         totalDiscount,
+        gstType,
+        gstRate,
+        cgstAmount,
+        sgstAmount,
+        igstAmount,
         grandTotal,
         paymentMode,
         businessName,
@@ -201,6 +246,32 @@ class $InvoicesTable extends Invoices
           _totalDiscountMeta,
           totalDiscount.isAcceptableOrUnknown(
               data['total_discount']!, _totalDiscountMeta));
+    }
+    if (data.containsKey('gst_type')) {
+      context.handle(_gstTypeMeta,
+          gstType.isAcceptableOrUnknown(data['gst_type']!, _gstTypeMeta));
+    }
+    if (data.containsKey('gst_rate')) {
+      context.handle(_gstRateMeta,
+          gstRate.isAcceptableOrUnknown(data['gst_rate']!, _gstRateMeta));
+    }
+    if (data.containsKey('cgst_amount')) {
+      context.handle(
+          _cgstAmountMeta,
+          cgstAmount.isAcceptableOrUnknown(
+              data['cgst_amount']!, _cgstAmountMeta));
+    }
+    if (data.containsKey('sgst_amount')) {
+      context.handle(
+          _sgstAmountMeta,
+          sgstAmount.isAcceptableOrUnknown(
+              data['sgst_amount']!, _sgstAmountMeta));
+    }
+    if (data.containsKey('igst_amount')) {
+      context.handle(
+          _igstAmountMeta,
+          igstAmount.isAcceptableOrUnknown(
+              data['igst_amount']!, _igstAmountMeta));
     }
     if (data.containsKey('grand_total')) {
       context.handle(
@@ -273,6 +344,16 @@ class $InvoicesTable extends Invoices
           .read(DriftSqlType.double, data['${effectivePrefix}subtotal'])!,
       totalDiscount: attachedDatabase.typeMapping
           .read(DriftSqlType.double, data['${effectivePrefix}total_discount'])!,
+      gstType: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}gst_type'])!,
+      gstRate: attachedDatabase.typeMapping
+          .read(DriftSqlType.double, data['${effectivePrefix}gst_rate'])!,
+      cgstAmount: attachedDatabase.typeMapping
+          .read(DriftSqlType.double, data['${effectivePrefix}cgst_amount'])!,
+      sgstAmount: attachedDatabase.typeMapping
+          .read(DriftSqlType.double, data['${effectivePrefix}sgst_amount'])!,
+      igstAmount: attachedDatabase.typeMapping
+          .read(DriftSqlType.double, data['${effectivePrefix}igst_amount'])!,
       grandTotal: attachedDatabase.typeMapping
           .read(DriftSqlType.double, data['${effectivePrefix}grand_total'])!,
       paymentMode: attachedDatabase.typeMapping
@@ -307,6 +388,11 @@ class InvoiceRow extends DataClass implements Insertable<InvoiceRow> {
   final String customerAddress;
   final double subtotal;
   final double totalDiscount;
+  final String gstType;
+  final double gstRate;
+  final double cgstAmount;
+  final double sgstAmount;
+  final double igstAmount;
   final double grandTotal;
   final String paymentMode;
   final String businessName;
@@ -324,6 +410,11 @@ class InvoiceRow extends DataClass implements Insertable<InvoiceRow> {
       required this.customerAddress,
       required this.subtotal,
       required this.totalDiscount,
+      required this.gstType,
+      required this.gstRate,
+      required this.cgstAmount,
+      required this.sgstAmount,
+      required this.igstAmount,
       required this.grandTotal,
       required this.paymentMode,
       required this.businessName,
@@ -343,6 +434,11 @@ class InvoiceRow extends DataClass implements Insertable<InvoiceRow> {
     map['customer_address'] = Variable<String>(customerAddress);
     map['subtotal'] = Variable<double>(subtotal);
     map['total_discount'] = Variable<double>(totalDiscount);
+    map['gst_type'] = Variable<String>(gstType);
+    map['gst_rate'] = Variable<double>(gstRate);
+    map['cgst_amount'] = Variable<double>(cgstAmount);
+    map['sgst_amount'] = Variable<double>(sgstAmount);
+    map['igst_amount'] = Variable<double>(igstAmount);
     map['grand_total'] = Variable<double>(grandTotal);
     map['payment_mode'] = Variable<String>(paymentMode);
     map['business_name'] = Variable<String>(businessName);
@@ -364,6 +460,11 @@ class InvoiceRow extends DataClass implements Insertable<InvoiceRow> {
       customerAddress: Value(customerAddress),
       subtotal: Value(subtotal),
       totalDiscount: Value(totalDiscount),
+      gstType: Value(gstType),
+      gstRate: Value(gstRate),
+      cgstAmount: Value(cgstAmount),
+      sgstAmount: Value(sgstAmount),
+      igstAmount: Value(igstAmount),
       grandTotal: Value(grandTotal),
       paymentMode: Value(paymentMode),
       businessName: Value(businessName),
@@ -387,6 +488,11 @@ class InvoiceRow extends DataClass implements Insertable<InvoiceRow> {
       customerAddress: serializer.fromJson<String>(json['customerAddress']),
       subtotal: serializer.fromJson<double>(json['subtotal']),
       totalDiscount: serializer.fromJson<double>(json['totalDiscount']),
+      gstType: serializer.fromJson<String>(json['gstType']),
+      gstRate: serializer.fromJson<double>(json['gstRate']),
+      cgstAmount: serializer.fromJson<double>(json['cgstAmount']),
+      sgstAmount: serializer.fromJson<double>(json['sgstAmount']),
+      igstAmount: serializer.fromJson<double>(json['igstAmount']),
       grandTotal: serializer.fromJson<double>(json['grandTotal']),
       paymentMode: serializer.fromJson<String>(json['paymentMode']),
       businessName: serializer.fromJson<String>(json['businessName']),
@@ -410,6 +516,11 @@ class InvoiceRow extends DataClass implements Insertable<InvoiceRow> {
       'customerAddress': serializer.toJson<String>(customerAddress),
       'subtotal': serializer.toJson<double>(subtotal),
       'totalDiscount': serializer.toJson<double>(totalDiscount),
+      'gstType': serializer.toJson<String>(gstType),
+      'gstRate': serializer.toJson<double>(gstRate),
+      'cgstAmount': serializer.toJson<double>(cgstAmount),
+      'sgstAmount': serializer.toJson<double>(sgstAmount),
+      'igstAmount': serializer.toJson<double>(igstAmount),
       'grandTotal': serializer.toJson<double>(grandTotal),
       'paymentMode': serializer.toJson<String>(paymentMode),
       'businessName': serializer.toJson<String>(businessName),
@@ -430,6 +541,11 @@ class InvoiceRow extends DataClass implements Insertable<InvoiceRow> {
           String? customerAddress,
           double? subtotal,
           double? totalDiscount,
+          String? gstType,
+          double? gstRate,
+          double? cgstAmount,
+          double? sgstAmount,
+          double? igstAmount,
           double? grandTotal,
           String? paymentMode,
           String? businessName,
@@ -447,6 +563,11 @@ class InvoiceRow extends DataClass implements Insertable<InvoiceRow> {
         customerAddress: customerAddress ?? this.customerAddress,
         subtotal: subtotal ?? this.subtotal,
         totalDiscount: totalDiscount ?? this.totalDiscount,
+        gstType: gstType ?? this.gstType,
+        gstRate: gstRate ?? this.gstRate,
+        cgstAmount: cgstAmount ?? this.cgstAmount,
+        sgstAmount: sgstAmount ?? this.sgstAmount,
+        igstAmount: igstAmount ?? this.igstAmount,
         grandTotal: grandTotal ?? this.grandTotal,
         paymentMode: paymentMode ?? this.paymentMode,
         businessName: businessName ?? this.businessName,
@@ -474,6 +595,14 @@ class InvoiceRow extends DataClass implements Insertable<InvoiceRow> {
       totalDiscount: data.totalDiscount.present
           ? data.totalDiscount.value
           : this.totalDiscount,
+      gstType: data.gstType.present ? data.gstType.value : this.gstType,
+      gstRate: data.gstRate.present ? data.gstRate.value : this.gstRate,
+      cgstAmount:
+          data.cgstAmount.present ? data.cgstAmount.value : this.cgstAmount,
+      sgstAmount:
+          data.sgstAmount.present ? data.sgstAmount.value : this.sgstAmount,
+      igstAmount:
+          data.igstAmount.present ? data.igstAmount.value : this.igstAmount,
       grandTotal:
           data.grandTotal.present ? data.grandTotal.value : this.grandTotal,
       paymentMode:
@@ -508,6 +637,11 @@ class InvoiceRow extends DataClass implements Insertable<InvoiceRow> {
           ..write('customerAddress: $customerAddress, ')
           ..write('subtotal: $subtotal, ')
           ..write('totalDiscount: $totalDiscount, ')
+          ..write('gstType: $gstType, ')
+          ..write('gstRate: $gstRate, ')
+          ..write('cgstAmount: $cgstAmount, ')
+          ..write('sgstAmount: $sgstAmount, ')
+          ..write('igstAmount: $igstAmount, ')
           ..write('grandTotal: $grandTotal, ')
           ..write('paymentMode: $paymentMode, ')
           ..write('businessName: $businessName, ')
@@ -521,23 +655,29 @@ class InvoiceRow extends DataClass implements Insertable<InvoiceRow> {
   }
 
   @override
-  int get hashCode => Object.hash(
-      id,
-      number,
-      date,
-      customerName,
-      customerPhone,
-      customerAddress,
-      subtotal,
-      totalDiscount,
-      grandTotal,
-      paymentMode,
-      businessName,
-      businessSubtitle,
-      businessPhone,
-      businessAddress,
-      businessLogoBase64,
-      pdfBase64);
+  int get hashCode => Object.hashAll([
+        id,
+        number,
+        date,
+        customerName,
+        customerPhone,
+        customerAddress,
+        subtotal,
+        totalDiscount,
+        gstType,
+        gstRate,
+        cgstAmount,
+        sgstAmount,
+        igstAmount,
+        grandTotal,
+        paymentMode,
+        businessName,
+        businessSubtitle,
+        businessPhone,
+        businessAddress,
+        businessLogoBase64,
+        pdfBase64
+      ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -550,6 +690,11 @@ class InvoiceRow extends DataClass implements Insertable<InvoiceRow> {
           other.customerAddress == this.customerAddress &&
           other.subtotal == this.subtotal &&
           other.totalDiscount == this.totalDiscount &&
+          other.gstType == this.gstType &&
+          other.gstRate == this.gstRate &&
+          other.cgstAmount == this.cgstAmount &&
+          other.sgstAmount == this.sgstAmount &&
+          other.igstAmount == this.igstAmount &&
           other.grandTotal == this.grandTotal &&
           other.paymentMode == this.paymentMode &&
           other.businessName == this.businessName &&
@@ -569,6 +714,11 @@ class InvoicesCompanion extends UpdateCompanion<InvoiceRow> {
   final Value<String> customerAddress;
   final Value<double> subtotal;
   final Value<double> totalDiscount;
+  final Value<String> gstType;
+  final Value<double> gstRate;
+  final Value<double> cgstAmount;
+  final Value<double> sgstAmount;
+  final Value<double> igstAmount;
   final Value<double> grandTotal;
   final Value<String> paymentMode;
   final Value<String> businessName;
@@ -587,6 +737,11 @@ class InvoicesCompanion extends UpdateCompanion<InvoiceRow> {
     this.customerAddress = const Value.absent(),
     this.subtotal = const Value.absent(),
     this.totalDiscount = const Value.absent(),
+    this.gstType = const Value.absent(),
+    this.gstRate = const Value.absent(),
+    this.cgstAmount = const Value.absent(),
+    this.sgstAmount = const Value.absent(),
+    this.igstAmount = const Value.absent(),
     this.grandTotal = const Value.absent(),
     this.paymentMode = const Value.absent(),
     this.businessName = const Value.absent(),
@@ -606,6 +761,11 @@ class InvoicesCompanion extends UpdateCompanion<InvoiceRow> {
     this.customerAddress = const Value.absent(),
     this.subtotal = const Value.absent(),
     this.totalDiscount = const Value.absent(),
+    this.gstType = const Value.absent(),
+    this.gstRate = const Value.absent(),
+    this.cgstAmount = const Value.absent(),
+    this.sgstAmount = const Value.absent(),
+    this.igstAmount = const Value.absent(),
     this.grandTotal = const Value.absent(),
     this.paymentMode = const Value.absent(),
     this.businessName = const Value.absent(),
@@ -627,6 +787,11 @@ class InvoicesCompanion extends UpdateCompanion<InvoiceRow> {
     Expression<String>? customerAddress,
     Expression<double>? subtotal,
     Expression<double>? totalDiscount,
+    Expression<String>? gstType,
+    Expression<double>? gstRate,
+    Expression<double>? cgstAmount,
+    Expression<double>? sgstAmount,
+    Expression<double>? igstAmount,
     Expression<double>? grandTotal,
     Expression<String>? paymentMode,
     Expression<String>? businessName,
@@ -646,6 +811,11 @@ class InvoicesCompanion extends UpdateCompanion<InvoiceRow> {
       if (customerAddress != null) 'customer_address': customerAddress,
       if (subtotal != null) 'subtotal': subtotal,
       if (totalDiscount != null) 'total_discount': totalDiscount,
+      if (gstType != null) 'gst_type': gstType,
+      if (gstRate != null) 'gst_rate': gstRate,
+      if (cgstAmount != null) 'cgst_amount': cgstAmount,
+      if (sgstAmount != null) 'sgst_amount': sgstAmount,
+      if (igstAmount != null) 'igst_amount': igstAmount,
       if (grandTotal != null) 'grand_total': grandTotal,
       if (paymentMode != null) 'payment_mode': paymentMode,
       if (businessName != null) 'business_name': businessName,
@@ -668,6 +838,11 @@ class InvoicesCompanion extends UpdateCompanion<InvoiceRow> {
       Value<String>? customerAddress,
       Value<double>? subtotal,
       Value<double>? totalDiscount,
+      Value<String>? gstType,
+      Value<double>? gstRate,
+      Value<double>? cgstAmount,
+      Value<double>? sgstAmount,
+      Value<double>? igstAmount,
       Value<double>? grandTotal,
       Value<String>? paymentMode,
       Value<String>? businessName,
@@ -686,6 +861,11 @@ class InvoicesCompanion extends UpdateCompanion<InvoiceRow> {
       customerAddress: customerAddress ?? this.customerAddress,
       subtotal: subtotal ?? this.subtotal,
       totalDiscount: totalDiscount ?? this.totalDiscount,
+      gstType: gstType ?? this.gstType,
+      gstRate: gstRate ?? this.gstRate,
+      cgstAmount: cgstAmount ?? this.cgstAmount,
+      sgstAmount: sgstAmount ?? this.sgstAmount,
+      igstAmount: igstAmount ?? this.igstAmount,
       grandTotal: grandTotal ?? this.grandTotal,
       paymentMode: paymentMode ?? this.paymentMode,
       businessName: businessName ?? this.businessName,
@@ -724,6 +904,21 @@ class InvoicesCompanion extends UpdateCompanion<InvoiceRow> {
     }
     if (totalDiscount.present) {
       map['total_discount'] = Variable<double>(totalDiscount.value);
+    }
+    if (gstType.present) {
+      map['gst_type'] = Variable<String>(gstType.value);
+    }
+    if (gstRate.present) {
+      map['gst_rate'] = Variable<double>(gstRate.value);
+    }
+    if (cgstAmount.present) {
+      map['cgst_amount'] = Variable<double>(cgstAmount.value);
+    }
+    if (sgstAmount.present) {
+      map['sgst_amount'] = Variable<double>(sgstAmount.value);
+    }
+    if (igstAmount.present) {
+      map['igst_amount'] = Variable<double>(igstAmount.value);
     }
     if (grandTotal.present) {
       map['grand_total'] = Variable<double>(grandTotal.value);
@@ -766,6 +961,11 @@ class InvoicesCompanion extends UpdateCompanion<InvoiceRow> {
           ..write('customerAddress: $customerAddress, ')
           ..write('subtotal: $subtotal, ')
           ..write('totalDiscount: $totalDiscount, ')
+          ..write('gstType: $gstType, ')
+          ..write('gstRate: $gstRate, ')
+          ..write('cgstAmount: $cgstAmount, ')
+          ..write('sgstAmount: $sgstAmount, ')
+          ..write('igstAmount: $igstAmount, ')
           ..write('grandTotal: $grandTotal, ')
           ..write('paymentMode: $paymentMode, ')
           ..write('businessName: $businessName, ')
@@ -1854,6 +2054,11 @@ typedef $$InvoicesTableCreateCompanionBuilder = InvoicesCompanion Function({
   Value<String> customerAddress,
   Value<double> subtotal,
   Value<double> totalDiscount,
+  Value<String> gstType,
+  Value<double> gstRate,
+  Value<double> cgstAmount,
+  Value<double> sgstAmount,
+  Value<double> igstAmount,
   Value<double> grandTotal,
   Value<String> paymentMode,
   Value<String> businessName,
@@ -1873,6 +2078,11 @@ typedef $$InvoicesTableUpdateCompanionBuilder = InvoicesCompanion Function({
   Value<String> customerAddress,
   Value<double> subtotal,
   Value<double> totalDiscount,
+  Value<String> gstType,
+  Value<double> gstRate,
+  Value<double> cgstAmount,
+  Value<double> sgstAmount,
+  Value<double> igstAmount,
   Value<double> grandTotal,
   Value<String> paymentMode,
   Value<String> businessName,
@@ -1936,6 +2146,21 @@ class $$InvoicesTableFilterComposer
 
   ColumnFilters<double> get totalDiscount => $composableBuilder(
       column: $table.totalDiscount, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get gstType => $composableBuilder(
+      column: $table.gstType, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<double> get gstRate => $composableBuilder(
+      column: $table.gstRate, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<double> get cgstAmount => $composableBuilder(
+      column: $table.cgstAmount, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<double> get sgstAmount => $composableBuilder(
+      column: $table.sgstAmount, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<double> get igstAmount => $composableBuilder(
+      column: $table.igstAmount, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<double> get grandTotal => $composableBuilder(
       column: $table.grandTotal, builder: (column) => ColumnFilters(column));
@@ -2023,6 +2248,21 @@ class $$InvoicesTableOrderingComposer
       column: $table.totalDiscount,
       builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get gstType => $composableBuilder(
+      column: $table.gstType, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<double> get gstRate => $composableBuilder(
+      column: $table.gstRate, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<double> get cgstAmount => $composableBuilder(
+      column: $table.cgstAmount, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<double> get sgstAmount => $composableBuilder(
+      column: $table.sgstAmount, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<double> get igstAmount => $composableBuilder(
+      column: $table.igstAmount, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<double> get grandTotal => $composableBuilder(
       column: $table.grandTotal, builder: (column) => ColumnOrderings(column));
 
@@ -2085,6 +2325,21 @@ class $$InvoicesTableAnnotationComposer
 
   GeneratedColumn<double> get totalDiscount => $composableBuilder(
       column: $table.totalDiscount, builder: (column) => column);
+
+  GeneratedColumn<String> get gstType =>
+      $composableBuilder(column: $table.gstType, builder: (column) => column);
+
+  GeneratedColumn<double> get gstRate =>
+      $composableBuilder(column: $table.gstRate, builder: (column) => column);
+
+  GeneratedColumn<double> get cgstAmount => $composableBuilder(
+      column: $table.cgstAmount, builder: (column) => column);
+
+  GeneratedColumn<double> get sgstAmount => $composableBuilder(
+      column: $table.sgstAmount, builder: (column) => column);
+
+  GeneratedColumn<double> get igstAmount => $composableBuilder(
+      column: $table.igstAmount, builder: (column) => column);
 
   GeneratedColumn<double> get grandTotal => $composableBuilder(
       column: $table.grandTotal, builder: (column) => column);
@@ -2163,6 +2418,11 @@ class $$InvoicesTableTableManager extends RootTableManager<
             Value<String> customerAddress = const Value.absent(),
             Value<double> subtotal = const Value.absent(),
             Value<double> totalDiscount = const Value.absent(),
+            Value<String> gstType = const Value.absent(),
+            Value<double> gstRate = const Value.absent(),
+            Value<double> cgstAmount = const Value.absent(),
+            Value<double> sgstAmount = const Value.absent(),
+            Value<double> igstAmount = const Value.absent(),
             Value<double> grandTotal = const Value.absent(),
             Value<String> paymentMode = const Value.absent(),
             Value<String> businessName = const Value.absent(),
@@ -2182,6 +2442,11 @@ class $$InvoicesTableTableManager extends RootTableManager<
             customerAddress: customerAddress,
             subtotal: subtotal,
             totalDiscount: totalDiscount,
+            gstType: gstType,
+            gstRate: gstRate,
+            cgstAmount: cgstAmount,
+            sgstAmount: sgstAmount,
+            igstAmount: igstAmount,
             grandTotal: grandTotal,
             paymentMode: paymentMode,
             businessName: businessName,
@@ -2201,6 +2466,11 @@ class $$InvoicesTableTableManager extends RootTableManager<
             Value<String> customerAddress = const Value.absent(),
             Value<double> subtotal = const Value.absent(),
             Value<double> totalDiscount = const Value.absent(),
+            Value<String> gstType = const Value.absent(),
+            Value<double> gstRate = const Value.absent(),
+            Value<double> cgstAmount = const Value.absent(),
+            Value<double> sgstAmount = const Value.absent(),
+            Value<double> igstAmount = const Value.absent(),
             Value<double> grandTotal = const Value.absent(),
             Value<String> paymentMode = const Value.absent(),
             Value<String> businessName = const Value.absent(),
@@ -2220,6 +2490,11 @@ class $$InvoicesTableTableManager extends RootTableManager<
             customerAddress: customerAddress,
             subtotal: subtotal,
             totalDiscount: totalDiscount,
+            gstType: gstType,
+            gstRate: gstRate,
+            cgstAmount: cgstAmount,
+            sgstAmount: sgstAmount,
+            igstAmount: igstAmount,
             grandTotal: grandTotal,
             paymentMode: paymentMode,
             businessName: businessName,

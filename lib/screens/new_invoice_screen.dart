@@ -54,11 +54,18 @@ class _NewInvoiceScreenState extends State<NewInvoiceScreen> {
   bool _generating = false;
   PaymentMode _paymentMode = PaymentMode.unpaid;
 
+  // --- GST state -------------------------------------------------------
+  GstType _gstType = GstType.none;
+  final _gstRateController = TextEditingController(text: '18');
+  // ----------------------------------------------------------------------
+
   bool get _isEditing => widget.editingInvoice != null;
 
   @override
   void initState() {
     super.initState();
+    _gstRateController.addListener(_calculateTotals);
+
     final editing = widget.editingInvoice;
     if (editing != null) {
       _invoiceNumber = editing.number;
@@ -67,6 +74,10 @@ class _NewInvoiceScreenState extends State<NewInvoiceScreen> {
       _addressController.text = editing.customerAddress;
       _selectedDate = editing.date;
       _paymentMode = editing.paymentMode;
+      _gstType = editing.gstType;
+      if (editing.gstRate > 0) {
+        _gstRateController.text = _trimNum(editing.gstRate);
+      }
       for (final item in editing.items) {
         final input = InvoiceItemInput();
         input.nameController.text = item.name;
@@ -133,8 +144,29 @@ class _NewInvoiceScreenState extends State<NewInvoiceScreen> {
     return discount;
   }
 
+  /// Amount GST is calculated on: subtotal after discount, never negative.
+  double get _taxableAmount {
+    final t = _subtotal - _totalDiscount;
+    return t < 0 ? 0 : t;
+  }
+
+  double get _gstRateValue => double.tryParse(_gstRateController.text) ?? 0;
+
+  double get _cgstAmount => _gstType == GstType.cgstSgst
+      ? _taxableAmount * (_gstRateValue / 2) / 100
+      : 0;
+
+  double get _sgstAmount => _gstType == GstType.cgstSgst
+      ? _taxableAmount * (_gstRateValue / 2) / 100
+      : 0;
+
+  double get _igstAmount =>
+      _gstType == GstType.igst ? _taxableAmount * _gstRateValue / 100 : 0;
+
+  double get _totalGst => _cgstAmount + _sgstAmount + _igstAmount;
+
   double get _grandTotal {
-    double grand = _subtotal - _totalDiscount;
+    final grand = _taxableAmount + _totalGst;
     return grand < 0 ? 0 : grand;
   }
 
@@ -184,6 +216,11 @@ class _NewInvoiceScreenState extends State<NewInvoiceScreen> {
       items: itemData,
       subtotal: _subtotal,
       totalDiscount: _totalDiscount,
+      gstType: _gstType,
+      gstRate: _gstType == GstType.none ? 0 : _gstRateValue,
+      cgstAmount: _cgstAmount,
+      sgstAmount: _sgstAmount,
+      igstAmount: _igstAmount,
       grandTotal: _grandTotal,
       pdfBase64: pdfBase64,
       paymentMode: _paymentMode,
@@ -331,6 +368,7 @@ class _NewInvoiceScreenState extends State<NewInvoiceScreen> {
     _nameController.dispose();
     _phoneController.dispose();
     _addressController.dispose();
+    _gstRateController.dispose();
     for (var item in _items) {
       item.dispose();
     }
@@ -695,6 +733,65 @@ class _NewInvoiceScreenState extends State<NewInvoiceScreen> {
                 ),
                 const SizedBox(height: 18),
 
+                // --- GST card ------------------------------------------------
+                _buildCard(
+                  title: 'GST Details',
+                  icon: Icons.receipt_long_outlined,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: GstType.values.map((type) {
+                          final selected = _gstType == type;
+                          return ChoiceChip(
+                            label: Text(type.label),
+                            selected: selected,
+                            selectedColor: AppColors.brand,
+                            backgroundColor: AppColors.paper,
+                            side: const BorderSide(color: AppColors.divider),
+                            labelStyle: TextStyle(
+                              color:
+                                  selected ? Colors.white : AppColors.inkNavy,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12.5,
+                            ),
+                            onSelected: (_) =>
+                                setState(() => _gstType = type),
+                          );
+                        }).toList(),
+                      ),
+                      if (_gstType != GstType.none) ...[
+                        const SizedBox(height: 14),
+                        _buildTextField(
+                          controller: _gstRateController,
+                          label: _gstType == GstType.cgstSgst
+                              ? 'GST Rate (%) — split equally as CGST + SGST'
+                              : 'IGST Rate (%)',
+                          hint: 'e.g. 18',
+                          keyboardType:
+                              const TextInputType.numberWithOptions(decimal: true),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(
+                                RegExp(r'^\d*\.?\d{0,2}')),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          _gstType == GstType.cgstSgst
+                              ? 'CGST ${_fmtRate(_gstRateValue / 2)}% + SGST ${_fmtRate(_gstRateValue / 2)}% will be added on ${currency.format(_taxableAmount)}'
+                              : 'IGST ${_fmtRate(_gstRateValue)}% will be added on ${currency.format(_taxableAmount)}',
+                          style: const TextStyle(
+                              fontSize: 11.5, color: AppColors.slate),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 18),
+                // ---------------------------------------------------------------
+
                 _buildCard(
   title: 'Payment Summary',
   icon: Icons.calculate_outlined,
@@ -707,6 +804,24 @@ class _NewInvoiceScreenState extends State<NewInvoiceScreen> {
         '- ${currency.format(_totalDiscount)}',
         valueColor: Colors.red,
       ),
+      if (_gstType == GstType.cgstSgst) ...[
+        const SizedBox(height: 8),
+        _summaryRow(
+          'CGST (${_fmtRate(_gstRateValue / 2)}%)',
+          currency.format(_cgstAmount),
+        ),
+        const SizedBox(height: 8),
+        _summaryRow(
+          'SGST (${_fmtRate(_gstRateValue / 2)}%)',
+          currency.format(_sgstAmount),
+        ),
+      ] else if (_gstType == GstType.igst) ...[
+        const SizedBox(height: 8),
+        _summaryRow(
+          'IGST (${_fmtRate(_gstRateValue)}%)',
+          currency.format(_igstAmount),
+        ),
+      ],
       const Padding(
         padding: EdgeInsets.symmetric(vertical: 10),
         child: Divider(color: AppColors.divider),
@@ -855,6 +970,10 @@ Widget _summaryRow(String label, String value, {Color? valueColor}) {
     ],
   );
 }
+
+  static String _fmtRate(double rate) =>
+      rate == rate.roundToDouble() ? rate.toInt().toString() : rate.toStringAsFixed(1);
+
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,

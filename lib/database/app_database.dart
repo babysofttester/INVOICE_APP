@@ -27,6 +27,17 @@ class Invoices extends Table {
  
   RealColumn get subtotal => real().withDefault(const Constant(0))();
   RealColumn get totalDiscount => real().withDefault(const Constant(0))();
+
+  // --- GST snapshot at generation time -----------------------------
+  // gstType is one of PaymentMode-style storage strings:
+  // 'none' | 'cgstSgst' | 'igst' (see GstType in models/invoice.dart).
+  TextColumn get gstType => text().withDefault(const Constant('none'))();
+  RealColumn get gstRate => real().withDefault(const Constant(0))();
+  RealColumn get cgstAmount => real().withDefault(const Constant(0))();
+  RealColumn get sgstAmount => real().withDefault(const Constant(0))();
+  RealColumn get igstAmount => real().withDefault(const Constant(0))();
+  // -------------------------------------------------------------------
+
   RealColumn get grandTotal => real().withDefault(const Constant(0))();
  
   // Stored as PaymentMode.name (same as the old Hive `storageValue`).
@@ -113,7 +124,7 @@ class AppDatabase extends _$AppDatabase {
   static final AppDatabase instance = AppDatabase._();
  
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
  
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -125,6 +136,16 @@ class AppDatabase extends _$AppDatabase {
             // Added after the initial schema — needed by anyone who
             // already had a v1 Drift database on disk.
             await m.createTable(migrationState);
+          }
+          if (from < 3) {
+            // GST feature — new columns on an already-existing
+            // Invoices table. Existing rows get the column defaults
+            // ('none' / 0), so old invoices simply show no GST.
+            await m.addColumn(invoices, invoices.gstType);
+            await m.addColumn(invoices, invoices.gstRate);
+            await m.addColumn(invoices, invoices.cgstAmount);
+            await m.addColumn(invoices, invoices.sgstAmount);
+            await m.addColumn(invoices, invoices.igstAmount);
           }
         },
       );
