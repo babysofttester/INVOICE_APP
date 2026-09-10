@@ -21,6 +21,11 @@ Future<void> main() async {
   await DeviceIdService.instance.init();
   await InvoiceStorageService.instance.init();
   await BusinessProfileService.instance.init();
+  // ★ Uses the FIXED AutoBackupService (native pick+persist channel) —
+  // no signature change here, still just init(). If auto-backup was
+  // already on from a previous session, this kicks off a real
+  // backupAll() internally and updates lastSyncFailed/lastSyncError if
+  // the folder grant is genuinely gone.
   await AutoBackupService.instance.init();
 
   runApp(const InvoiceApp());

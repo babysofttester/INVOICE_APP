@@ -1,21 +1,18 @@
 // lib/services/auto_backup_service.dart
 //
-// "No Google API key" auto-backup using Android's Storage Access
-// Framework (SAF), via `saf_util` (folder picker) + `saf_stream`
-// (file read/write). The user picks a folder once — they can navigate
-// into their Google Drive there, since the Drive app registers itself
-// as a Documents Provider. SAF persists that permission automatically.
+// ★ ROOT-CAUSE FIX vs your previous version: `enable()` / `reconnectFolder()`
+// used to call `_safUtil.pickDirectory()` (from the `saf_util` package)
+// and just trust that it persisted the folder grant. It often doesn't,
+// reliably, across app restarts — that's why writes worked right after
+// picking a folder but silently died later ("access lost" / never
+// synced again), even though the retry/backoff logic below was already
+// correct.
 //
-// Unlike a single combined export, this app backs up EVERY invoice as
-// its own PDF file (same bytes as `invoice.pdfBase64`, same file the
-// user already gets from "Preview / Print / Save as PDF"). Each time a
-// new invoice is generated, or an existing one is edited, only that one
-// PDF is (re)written — cheap, and the Drive folder always mirrors what's
-// on the device.
-//
-// LIMITATION: Android only (same as Spendly's implementation) — iOS
-// doesn't expose Drive this way, so this is gated behind
-// AutoBackupService.instance.available in the UI.
+// Fix (same one Spendly uses): pick + persist via a native MethodChannel
+// that calls Android's `takePersistableUriPermission` directly — see
+// `saf_permission_channel.dart` + `MainActivity.kt`. Everything else
+// (single-file-per-invoice backup, retry-before-fail, "Permission
+// Denial" detection, delete+recreate fallback) is unchanged.
 
 import 'dart:async';
 import 'dart:convert';
@@ -23,10 +20,12 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:saf_stream/saf_stream.dart';
 import 'package:saf_util/saf_util.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'saf_permission_channel.dart';
 import '../models/invoice.dart';
 import 'invoice_storage_service.dart';
 
@@ -40,19 +39,10 @@ class AutoBackupService {
   final SafUtil _safUtil = SafUtil();
   final SafStream _safStream = SafStream();
 
-  /// Drives the Settings switch.
   final ValueNotifier<bool> isEnabled = ValueNotifier<bool>(false);
-
-  /// Timestamp of the last successful sync, for "Last synced: ..." in UI.
   final ValueNotifier<DateTime?> lastSyncedAt = ValueNotifier<DateTime?>(null);
-
-  /// True if the last sync attempt failed (e.g. folder access revoked).
-  /// Doesn't silently flip [isEnabled] off — same reasoning as Spendly's
-  /// version: a transient failure shouldn't make the toggle lie to the
-  /// user about being on.
   final ValueNotifier<bool> lastSyncFailed = ValueNotifier<bool>(false);
-
-  /// True while a backup (single invoice or full resync) is in progress.
+  final ValueNotifier<String?> lastSyncError = ValueNotifier<String?>(null);
   final ValueNotifier<bool> isSyncing = ValueNotifier<bool>(false);
 
   SharedPreferences? _prefs;
@@ -60,56 +50,92 @@ class AutoBackupService {
 
   bool get available => !kIsWeb && Platform.isAndroid;
 
-  /// Call once at app start (main.dart, alongside
-  /// InvoiceStorageService.instance.init()) so `isEnabled` is loaded
-  /// before the first invoice is generated. Safe to call again from the
-  /// Settings screen too — it's a no-op after the first successful run.
+  String? get currentFolderUri => _prefs?.getString(_kDirUriKey);
+
   Future<void> init() async {
     if (_initialized) return;
     _prefs = await SharedPreferences.getInstance();
     isEnabled.value = available && (_prefs!.getBool(_kEnabledKey) ?? false);
     _initialized = true;
+
+    if (isEnabled.value) {
+      unawaited(backupAll());
+    }
   }
 
   Future<void> _ensureInit() async {
     if (!_initialized) await init();
   }
 
-  /// Shows the native folder picker. Returns false if the user cancels.
-  /// On success, immediately does a full resync so any invoices that
-  /// were already generated before auto-backup was turned on also show
-  /// up in the Drive folder right away.
+  /// ★ FIXED — now picks AND persists via the native channel in one
+  /// call, instead of `_safUtil.pickDirectory()`.
   Future<bool> enable() async {
     if (!available) {
       throw Exception('Auto-backup is only available on Android right now.');
     }
     await _ensureInit();
 
-    final dir = await _safUtil.pickDirectory();
-    if (dir == null) return false; // user cancelled the picker
+    String? treeUri;
+    try {
+      treeUri = await SafPermissionChannel.pickDirectoryAndPersist();
+    } on PlatformException catch (e) {
+      debugPrint('❌ pickDirectoryAndPersist FAILED: ${e.code} - ${e.message}');
+      lastSyncFailed.value = true;
+      lastSyncError.value =
+          'Could not save folder permission permanently (${e.code}). Please try again.';
+      return false;
+    }
 
-    await _prefs!.setString(_kDirUriKey, dir.uri);
+    if (treeUri == null) return false; // user cancelled the picker
+
+    await _prefs!.setString(_kDirUriKey, treeUri);
     await _prefs!.setBool(_kEnabledKey, true);
     isEnabled.value = true;
     lastSyncFailed.value = false;
+    lastSyncError.value = null;
 
     await backupAll();
     return true;
   }
 
-  /// Turns auto-backup off. (saf_util doesn't expose an explicit
-  /// "release permission" call — Android naturally drops grants the app
-  /// stops using; clearing our stored reference is enough to stop.)
+  /// ★ FIXED — same native pick+persist call, so a genuine reconnect
+  /// actually sticks this time instead of dying again after restart.
+  Future<bool> reconnectFolder() async {
+    if (!available) return false;
+    await _ensureInit();
+
+    String? treeUri;
+    try {
+      treeUri = await SafPermissionChannel.pickDirectoryAndPersist();
+    } on PlatformException catch (e) {
+      debugPrint('❌ pickDirectoryAndPersist FAILED: ${e.code} - ${e.message}');
+      lastSyncFailed.value = true;
+      lastSyncError.value =
+          'Could not save folder permission permanently (${e.code}). Please try again.';
+      return false;
+    }
+
+    if (treeUri == null) return false;
+
+    await _prefs!.setString(_kDirUriKey, treeUri);
+    await _prefs!.setBool(_kEnabledKey, true);
+    isEnabled.value = true;
+    lastSyncFailed.value = false;
+    lastSyncError.value = null;
+
+    await backupAll();
+    return true;
+  }
+
   Future<void> disable() async {
     await _ensureInit();
     await _prefs!.remove(_kDirUriKey);
     await _prefs!.setBool(_kEnabledKey, false);
     isEnabled.value = false;
+    lastSyncFailed.value = false;
+    lastSyncError.value = null;
   }
 
-  /// Backs up a single invoice's PDF — call this right after
-  /// saveInvoice() in NewInvoiceScreen so every "Generate" / "Update"
-  /// immediately syncs, without waiting for the user to open Settings.
   Future<void> backupInvoice(Invoice invoice) async {
     if (!available) return;
     await _ensureInit();
@@ -120,29 +146,12 @@ class AutoBackupService {
 
     isSyncing.value = true;
     try {
-      final bytes = base64Decode(invoice.pdfBase64);
-      final fileName = '${_safeFileName(invoice.number)}.pdf';
-
-      await _safStream.writeFileBytes(
-        treeUri,
-        fileName,
-        'application/pdf',
-        Uint8List.fromList(bytes),
-        overwrite: true,
-      );
-
-      lastSyncedAt.value = DateTime.now();
-      lastSyncFailed.value = false;
-    } catch (_) {
-      lastSyncFailed.value = true;
+      await _attemptWriteSingle(treeUri, invoice);
     } finally {
       isSyncing.value = false;
     }
   }
 
-  /// Re-writes every saved invoice's PDF. Called once right after the
-  /// user turns auto-backup on; also exposed as a manual "Backup All
-  /// Now" action in Settings.
   Future<void> backupAll() async {
     if (!available) return;
     await _ensureInit();
@@ -156,28 +165,94 @@ class AutoBackupService {
       final invoices = InvoiceStorageService.instance.getAll();
       for (final invoice in invoices) {
         if (invoice.pdfBase64.isEmpty) continue;
-        final bytes = base64Decode(invoice.pdfBase64);
-        final fileName = '${_safeFileName(invoice.number)}.pdf';
-        await _safStream.writeFileBytes(
-          treeUri,
-          fileName,
-          'application/pdf',
-          Uint8List.fromList(bytes),
-          overwrite: true,
-        );
+        final ok = await _attemptWriteSingle(treeUri, invoice);
+        if (!ok) return;
       }
       lastSyncedAt.value = DateTime.now();
       lastSyncFailed.value = false;
-    } catch (_) {
-      lastSyncFailed.value = true;
+      lastSyncError.value = null;
     } finally {
       isSyncing.value = false;
     }
   }
 
-  /// Invoice numbers can end up in a file name as-is (e.g.
-  /// "INV-AB12CD-000004"), but strip anything a filesystem would choke
-  /// on just in case.
+  Future<bool> _attemptWriteSingle(
+    String treeUri,
+    Invoice invoice, {
+    int retriesLeft = 2,
+  }) async {
+    final fileName = '${_safeFileName(invoice.number)}.pdf';
+
+    try {
+      final bytes = base64Decode(invoice.pdfBase64);
+
+      await _safStream.writeFileBytes(
+        treeUri,
+        fileName,
+        'application/pdf',
+        Uint8List.fromList(bytes),
+        overwrite: true,
+      );
+
+      lastSyncedAt.value = DateTime.now();
+      lastSyncFailed.value = false;
+      lastSyncError.value = null;
+      return true;
+    } catch (e, stack) {
+      debugPrint('❌ AutoBackupService write FAILED for $fileName: $e');
+      debugPrint('$stack');
+
+      final msg = e.toString();
+
+      if (msg.contains('Permission Denial')) {
+        lastSyncFailed.value = true;
+        lastSyncError.value =
+            'Your phone revoked the folder access (common on some phones to save battery). '
+            'Tap "Reconnect Folder" below to fix it.';
+        return false;
+      }
+
+      if (retriesLeft > 0) {
+        final delaySeconds = (3 - retriesLeft) * 2 + 2;
+        await Future.delayed(Duration(seconds: delaySeconds));
+        return _attemptWriteSingle(treeUri, invoice, retriesLeft: retriesLeft - 1);
+      }
+
+      if (msg.contains('File creation failed')) {
+        try {
+          final existing = await _safUtil.child(treeUri, [fileName]);
+          if (existing != null) {
+            await _safUtil.delete(existing.uri, false);
+          }
+
+          final bytes = base64Decode(invoice.pdfBase64);
+          await _safStream.writeFileBytes(
+            treeUri,
+            fileName,
+            'application/pdf',
+            Uint8List.fromList(bytes),
+            overwrite: true,
+          );
+
+          lastSyncedAt.value = DateTime.now();
+          lastSyncFailed.value = false;
+          lastSyncError.value = null;
+          return true;
+        } catch (e2, s2) {
+          debugPrint('❌ AutoBackupService delete+recreate fallback FAILED: $e2');
+          debugPrint('$s2');
+          lastSyncFailed.value = true;
+          lastSyncError.value = e2.toString();
+          return false;
+        }
+      }
+
+      lastSyncFailed.value = true;
+      lastSyncError.value = msg;
+      return false;
+    }
+  }
+
   String _safeFileName(String raw) =>
       raw.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
 }

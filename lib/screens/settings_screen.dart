@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:invoice_generator/screens/main_shell.dart';
 import 'package:intl/intl.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:upgrader/upgrader.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -191,7 +192,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     }
   }
+    
+  Future<void> _shareApp() async {
+    final info = await PackageInfo.fromPlatform();
+    final packageName = info.packageName; // ye gradle ke applicationId se aata hai automatically
 
+    String link = _UpdateConfig.downloadPageUrl; // fallback (desktop / not-yet-published)
+
+    if (!kIsWeb) {
+      if (Platform.isAndroid) {
+        link = 'https://play.google.com/store/apps/details?id=$packageName';
+      } else if (Platform.isIOS) {
+        // iOS ke liye package name se URL nahi banta — App Store numeric ID chahiye hoti hai,
+        // wo gradle/pubspec se nahi milti, isliye ye ek hi jagah hardcode karna padega:
+        const iosAppId = ''; // e.g. '0000000000' — App Store Connect se milega publish ke baad
+        if (iosAppId.isNotEmpty) {
+          link = 'https://apps.apple.com/app/id$iosAppId';
+        }
+      }
+    }
+
+    final message = link.isNotEmpty
+        ? 'Check out InvoiceNow — a simple invoice generator app!\n$link'
+        : 'Check out InvoiceNow — a simple invoice generator app!';
+
+    await Share.share(message, subject: 'InvoiceNow App');
+  }
+  
   // --- Auto backup toggle handling -----------------------------------
   Future<void> _toggleAutoBackup(bool turnOn) async {
     if (turnOn) {
@@ -237,11 +264,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (!mounted) return;
       if (_autoBackup.lastSyncFailed.value) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Backup failed — check folder access and try again.')),
+          SnackBar(
+              content: Text(_autoBackup.lastSyncError.value ??
+                  'Backup failed — check folder access and try again.')),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('All invoices backed up ✓')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _autoBackupBusy = false);
+    }
+  }
+
+  // ★ NEW — mirrors Spendly's syncAllNow(): once a sync has actually
+  // failed with a real permission loss, a plain retry hits the same
+  // broken grant again. Re-pick the folder first, then sync.
+  Future<void> _reconnectFolder() async {
+    setState(() => _autoBackupBusy = true);
+    try {
+      final reconnected = await _autoBackup.reconnectFolder();
+      if (!mounted) return;
+      if (!reconnected) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No folder was selected — please try again.')),
+        );
+        return;
+      }
+      if (_autoBackup.lastSyncFailed.value) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(_autoBackup.lastSyncError.value ??
+                  'Still could not sync — please check folder access.')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Reconnected — all invoices synced ✓')),
         );
       }
     } finally {
@@ -308,34 +367,61 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 return ValueListenableBuilder<DateTime?>(
                   valueListenable: _autoBackup.lastSyncedAt,
                   builder: (context, lastSynced, __) {
-                    return Column(
-                      children: [
-                        _buildSwitchTile(
-                          icon: Icons.cloud_sync_rounded,
-                          title: 'Auto Backup to Drive (PDF)',
-                          subtitle: enabled
-                              ? _lastSyncedLabel(lastSynced)
-                              : 'Pick a Drive folder once — every generated invoice syncs there automatically',
-                          value: enabled,
-                          busy: _autoBackupBusy,
-                          onChanged: _autoBackupBusy ? null : _toggleAutoBackup,
-                        ),
-                        if (enabled) ...[
-                          const SizedBox(height: 8),
-                          _buildSettingsTile(
-                            icon: Icons.sync_rounded,
-                            title: 'Backup All Now',
-                            subtitle: 'Re-sync every saved invoice right away',
-                            onTap: _autoBackupBusy ? () {} : _backupAllNow,
-                            trailing: _autoBackupBusy
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(strokeWidth: 2.5))
-                                : null,
-                          ),
-                        ],
-                      ],
+                    return ValueListenableBuilder<bool>(
+                      valueListenable: _autoBackup.lastSyncFailed,
+                      builder: (context, failed, ___) {
+                        return ValueListenableBuilder<String?>(
+                          valueListenable: _autoBackup.lastSyncError,
+                          builder: (context, errorMsg, ____) {
+                            return Column(
+                              children: [
+                                _buildSwitchTile(
+                                  icon: (enabled && failed) ? Icons.cloud_off_rounded : Icons.cloud_sync_rounded,
+                                  title: 'Auto Backup to Drive (PDF)',
+                                  subtitle: !enabled
+                                      ? 'Pick a Drive folder once — every generated invoice syncs there automatically'
+                                      : (failed
+                                          ? '⚠️ Backup file needs reconnecting — your invoices are safe'
+                                          : _lastSyncedLabel(lastSynced)),
+                                  iconColor: (enabled && failed) ? AppColors.amberDeep : AppColors.brand,
+                                  value: enabled,
+                                  busy: _autoBackupBusy,
+                                  onChanged: _autoBackupBusy ? null : _toggleAutoBackup,
+                                ),
+                                if (enabled) ...[
+                                  const SizedBox(height: 8),
+                                  if (failed)
+                                    _buildSettingsTile(
+                                      icon: Icons.link_rounded,
+                                      title: 'Reconnect Folder',
+                                      subtitle: errorMsg ?? 'Your data is safe — only the backup link needs reconnecting',
+                                      onTap: _autoBackupBusy ? () {} : _reconnectFolder,
+                                      trailing: _autoBackupBusy
+                                          ? const SizedBox(
+                                              width: 20,
+                                              height: 20,
+                                              child: CircularProgressIndicator(strokeWidth: 2.5))
+                                          : null,
+                                    )
+                                  else
+                                    _buildSettingsTile(
+                                      icon: Icons.sync_rounded,
+                                      title: 'Backup All Now',
+                                      subtitle: 'Re-sync every saved invoice right away',
+                                      onTap: _autoBackupBusy ? () {} : _backupAllNow,
+                                      trailing: _autoBackupBusy
+                                          ? const SizedBox(
+                                              width: 20,
+                                              height: 20,
+                                              child: CircularProgressIndicator(strokeWidth: 2.5))
+                                          : null,
+                                    ),
+                                ],
+                              ],
+                            );
+                          },
+                        );
+                      },
                     );
                   },
                 );
@@ -357,17 +443,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ],
 
-          const SizedBox(height: 8),
+                    const SizedBox(height: 8),
 
           _buildSettingsTile(
-            icon: Icons.help_outline_rounded,
-            title: 'Help & Support',
-            subtitle: 'How to use the app',
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Help section coming soon')),
-              );
-            },
+            icon: Icons.share_rounded,
+            title: 'Share this App',
+            subtitle: 'Tell others about InvoiceNow',
+            onTap: _shareApp,
           ),
 
           const SizedBox(height: 40),
@@ -430,6 +512,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           color: AppColors.inkNavy)),
                   const SizedBox(height: 4),
                   Text(subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 13, color: AppColors.slateLight)),
                 ],
               ),
@@ -448,6 +532,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required bool value,
     required bool busy,
     required ValueChanged<bool>? onChanged,
+    Color? iconColor,
   }) {
     return Container(
       padding: const EdgeInsets.all(18),
@@ -458,7 +543,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       child: Row(
         children: [
-          Icon(icon, color: AppColors.brand, size: 26),
+          Icon(icon, color: iconColor ?? AppColors.brand, size: 26),
           const SizedBox(width: 16),
           Expanded(
             child: Column(

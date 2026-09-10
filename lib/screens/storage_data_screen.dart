@@ -99,8 +99,35 @@ class _StorageDataScreenState extends State<StorageDataScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(_autoBackup.lastSyncFailed.value
-              ? 'Backup failed — check folder access and try again.'
+              ? (_autoBackup.lastSyncError.value ?? 'Backup failed — check folder access and try again.')
               : 'All invoices backed up ✓'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _autoBackupBusy = false);
+    }
+  }
+
+  // ★ NEW — same reasoning as Spendly's syncAllNow(): once a sync has
+  // actually failed with a real permission loss, retrying the same
+  // grant won't help. Re-pick the folder first (fresh grant), then
+  // sync.
+  Future<void> _reconnectFolder() async {
+    setState(() => _autoBackupBusy = true);
+    try {
+      final reconnected = await _autoBackup.reconnectFolder();
+      if (!mounted) return;
+      if (!reconnected) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No folder was selected — please try again.')),
+        );
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_autoBackup.lastSyncFailed.value
+              ? (_autoBackup.lastSyncError.value ?? 'Still could not sync — please try again.')
+              : 'Reconnected — all invoices synced ✓'),
         ),
       );
     } finally {
@@ -345,85 +372,123 @@ Widget build(BuildContext context) {
         return ValueListenableBuilder<DateTime?>(
           valueListenable: _autoBackup.lastSyncedAt,
           builder: (context, lastSynced, __) {
-            return Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.paperCard,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.divider),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(9),
-                        decoration: BoxDecoration(
-                          color: AppColors.brand.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(11),
+            return ValueListenableBuilder<bool>(
+              valueListenable: _autoBackup.lastSyncFailed,
+              builder: (context, failed, ___) {
+                return ValueListenableBuilder<String?>(
+                  valueListenable: _autoBackup.lastSyncError,
+                  builder: (context, errorMsg, ____) {
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.paperCard,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: (enabled && failed) ? AppColors.amberDeep.withValues(alpha: 0.4) : AppColors.divider,
                         ),
-                        child: const Icon(Icons.cloud_sync_rounded, color: AppColors.brand, size: 20),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Automatic Backup',
-                              style: GoogleFonts.lora(
-                                fontSize: 14.5,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.inkNavy,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(9),
+                                decoration: BoxDecoration(
+                                  color: (enabled && failed)
+                                      ? AppColors.amberDeep.withValues(alpha: 0.1)
+                                      : AppColors.brand.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(11),
+                                ),
+                                child: Icon(
+                                  (enabled && failed) ? Icons.cloud_off_rounded : Icons.cloud_sync_rounded,
+                                  color: (enabled && failed) ? AppColors.amberDeep : AppColors.brand,
+                                  size: 20,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              enabled
-                                  ? _lastSyncedLabel(lastSynced)
-                                  : 'Pick a Drive folder once — every invoice PDF syncs there automatically from then on',
-                              style: const TextStyle(fontSize: 12.5, height: 1.4, color: AppColors.slate),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Automatic Backup',
+                                      style: GoogleFonts.lora(
+                                        fontSize: 14.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.inkNavy,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      !enabled
+                                          ? 'Pick a Drive folder once — every invoice PDF syncs there automatically from then on'
+                                          : (failed
+                                              ? '⚠️ ${errorMsg ?? "Backup file needs reconnecting — your invoices are safe on this device"}'
+                                              : _lastSyncedLabel(lastSynced)),
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        height: 1.4,
+                                        color: (enabled && failed) ? AppColors.amberDeep : AppColors.slate,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              _autoBackupBusy
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(strokeWidth: 2.5))
+                                  : Switch(
+                                      value: enabled,
+                                      onChanged: _toggleAutoBackup,
+                                      activeColor: AppColors.brand,
+                                    ),
+                            ],
+                          ),
+                          if (enabled) ...[
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: failed
+                                  ? OutlinedButton.icon(
+                                      onPressed: _autoBackupBusy ? null : _reconnectFolder,
+                                      icon: const Icon(Icons.link_rounded, size: 17, color: AppColors.amberDeep),
+                                      label: const Text(
+                                        'Reconnect Folder',
+                                        style: TextStyle(color: AppColors.amberDeep, fontWeight: FontWeight.w700),
+                                      ),
+                                      style: OutlinedButton.styleFrom(
+                                        side: const BorderSide(color: AppColors.amberDeep),
+                                        padding: const EdgeInsets.symmetric(vertical: 10),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      ),
+                                    )
+                                  : OutlinedButton.icon(
+                                      onPressed: _autoBackupBusy ? null : _backupAllNow,
+                                      icon: const Icon(Icons.sync_rounded, size: 17, color: AppColors.brand),
+                                      label: const Text(
+                                        'Backup All Now',
+                                        style: TextStyle(color: AppColors.brand, fontWeight: FontWeight.w700),
+                                      ),
+                                      style: OutlinedButton.styleFrom(
+                                        side: const BorderSide(color: AppColors.brand),
+                                        padding: const EdgeInsets.symmetric(vertical: 10),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      ),
+                                    ),
                             ),
                           ],
-                        ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      _autoBackupBusy
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2.5))
-                          : Switch(
-                              value: enabled,
-                              onChanged: _toggleAutoBackup,
-                              activeColor: AppColors.brand,
-                            ),
-                    ],
-                  ),
-                  if (enabled) ...[
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: _autoBackupBusy ? null : _backupAllNow,
-                        icon: const Icon(Icons.sync_rounded, size: 17, color: AppColors.brand),
-                        label: const Text(
-                          'Backup All Now',
-                          style: TextStyle(color: AppColors.brand, fontWeight: FontWeight.w700),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: AppColors.brand),
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
+                    );
+                  },
+                );
+              },
             );
           },
         );

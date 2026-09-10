@@ -323,11 +323,11 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
             children: [
-              Text('My Invoices',
-                  style: Theme.of(context)
-                      .textTheme
-                      .displayLarge
-                      ?.copyWith(fontSize: 26)),
+              // Text('My Invoices',
+              //     style: Theme.of(context)
+              //         .textTheme
+              //         .displayLarge
+              //         ?.copyWith(fontSize: 26)),
               const SizedBox(height: 8),
 
               // ── Search box + separate filter button, side by side ──
