@@ -10,7 +10,7 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
 
     // ★ Must match SafPermissionChannel._channel in the Dart file exactly.
-    private val CHANNEL = "com.invoicenow.app/saf_persist"
+    private val CHANNEL = "com.babysoft.invoice_generator/saf_persist"
     private val REQUEST_CODE_OPEN_TREE = 4201
     private var pendingResult: MethodChannel.Result? = null
 

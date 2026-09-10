@@ -19,7 +19,7 @@ import 'package:flutter/foundation.dart';
 class SafPermissionChannel {
   // ★ CHANGE if you pick a different channel name in MainActivity.kt —
   // must match exactly on both sides.
-  static const _channel = MethodChannel('com.invoicenow.app/saf_persist');
+  static const _channel = MethodChannel('com.babysoft.invoice_generator/saf_persist');
 
   /// Pick + persist in a single native call, using the exact same
   /// flags that come back in the picker's Intent result. Returns the
